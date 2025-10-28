@@ -4,11 +4,84 @@ if (!defined('ABSPATH')) exit;
 class FVPH_Shortcodes {
 
     public static function register(){
-        // já existente (mantido)
-        add_shortcode('fv_products', [__CLASS__, 'products']);
+        // já existentes
+        add_shortcode('fv_products',   [__CLASS__, 'products']);
+        add_shortcode('fvph_catalog',  [__CLASS__, 'catalog']);
 
-        // novo catálogo completo (filtro + busca + paginação)
-        add_shortcode('fvph_catalog', [__CLASS__, 'catalog']);
+        // >>> NOVOS <<<
+        add_shortcode('fvph_buy_url',  [__CLASS__, 'buy_url']);   // retorna _fvph_buy_url com UTM
+        add_shortcode('fvph_buy_label',[__CLASS__, 'buy_label']); // retorna label ou "Comprar na {parceiro}" ou "Comprar"
+    }
+
+    /* ---------------------------------------------
+     * Helpers internos
+     * -------------------------------------------*/
+    protected static function resolve_post_id($atts){
+        // permite usar id="123" no shortcode; fallback: post atual
+        $pid = 0;
+        if (isset($atts['id'])) {
+            $pid = absint($atts['id']);
+        }
+        if (!$pid) {
+            $pid = get_the_ID();
+        }
+        return $pid;
+    }
+
+    /* =========================================================
+     *  NOVOS: [fvph_buy_url] e [fvph_buy_label]
+     * =======================================================*/
+
+    /**
+     * [fvph_buy_url utm="1" source="forumdovapor" medium="referral" campaign="produto" id=""]
+     * Retorna a URL de compra (_fvph_buy_url) com UTM anexada (opcional).
+     */
+    public static function buy_url($atts = []){
+        $a = shortcode_atts([
+            'id'       => '',          // opcional: força um post_id
+            'utm'      => '1',         // "1" liga UTM, "0" desliga
+            'source'   => 'forumdovapor',
+            'medium'   => 'referral',
+            'campaign' => 'produto',
+        ], $atts, 'fvph_buy_url');
+
+        $post_id = self::resolve_post_id($a);
+        if (!$post_id) return '';
+
+        $url = get_post_meta($post_id, '_fvph_buy_url', true);
+        if (!$url) return '';
+
+        // anexa UTM se habilitado
+        if ($a['utm'] === '1') {
+            $utm_args = [
+                'utm_source'   => sanitize_title($a['source']),
+                'utm_medium'   => sanitize_title($a['medium']),
+                'utm_campaign' => sanitize_title($a['campaign']),
+            ];
+            $url = add_query_arg($utm_args, $url);
+        }
+        return esc_url($url);
+    }
+
+    /**
+     * [fvph_buy_label id=""]
+     * Retorna _fvph_buy_label, senão "Comprar na {parceiro}", senão "Comprar".
+     */
+    public static function buy_label($atts = []){
+        $a = shortcode_atts([
+            'id' => '',
+        ], $atts, 'fvph_buy_label');
+
+        $post_id = self::resolve_post_id($a);
+        if (!$post_id) return 'Comprar';
+
+        $label = get_post_meta($post_id, '_fvph_buy_label', true);
+        if (!empty($label)) return esc_html($label);
+
+        $partner = get_post_meta($post_id, '_fvph_partner_name', true);
+        if (!empty($partner)) return 'Comprar na ' . esc_html($partner);
+
+        return 'Comprar';
     }
 
     /* =========================================================
@@ -106,23 +179,20 @@ class FVPH_Shortcodes {
      * =======================================================*/
     public static function catalog($atts = []){
         $atts = shortcode_atts([
-            'per_page' => 15, // 3 colunas x 5 linhas
+            'per_page' => 15,
         ], $atts, 'fvph_catalog');
 
         $per_page = max(1, (int)$atts['per_page']);
 
-        // Taxonomias (usa as do Synchronizer se existirem)
         $tax_marca = class_exists('FVPH_Synchronizer') ? FVPH_Synchronizer::TAX_MARCA : 'marca_prod';
         $tax_tipo  = class_exists('FVPH_Synchronizer') ? FVPH_Synchronizer::TAX_CATEG : 'categoria_prod';
 
-        // Inputs (GET)
         $q     = isset($_GET['q']) ? sanitize_text_field(wp_unslash($_GET['q'])) : '';
         $marca = (isset($_GET['marca']) && is_array($_GET['marca'])) ? array_map('sanitize_title', $_GET['marca']) : [];
         $tipo  = (isset($_GET['tipo'])  && is_array($_GET['tipo']))  ? array_map('sanitize_title', $_GET['tipo'])  : [];
         $subs  = (isset($_GET['subs'])  && is_array($_GET['subs']))  ? array_map('sanitize_text_field', $_GET['subs']) : [];
         $paged = isset($_GET['pag']) ? max(1, (int)$_GET['pag']) : max(1, get_query_var('paged', 1));
 
-        // tax/meta query
         $tax_query = ['relation' => 'AND'];
         if ($marca) $tax_query[] = ['taxonomy'=>$tax_marca,'field'=>'slug','terms'=>$marca];
         if ($tipo)  $tax_query[] = ['taxonomy'=>$tax_tipo, 'field'=>'slug','terms'=>$tipo];
@@ -130,7 +200,6 @@ class FVPH_Shortcodes {
         $meta_query = ['relation' => 'AND'];
         if ($subs)  $meta_query[] = ['key'=>'_fvph_attr_substancia','value'=>$subs,'compare'=>'IN'];
 
-        // query principal
         $args = [
             'post_type'      => 'produto',
             'post_status'    => 'publish',
@@ -145,11 +214,9 @@ class FVPH_Shortcodes {
 
         $q_products = new WP_Query($args);
 
-        // termos para filtros
         $terms_marca = get_terms(['taxonomy'=>$tax_marca,'hide_empty'=>true,'number'=>1000]);
         $terms_tipo  = get_terms(['taxonomy'=>$tax_tipo, 'hide_empty'=>true,'number'=>1000]);
 
-        // valores distintos de Substância (meta)
         global $wpdb;
         $subs_values = $wpdb->get_col($wpdb->prepare(
             "SELECT DISTINCT meta_value 
@@ -163,7 +230,6 @@ class FVPH_Shortcodes {
 
         ob_start(); ?>
         <div class="fvph-catalog">
-          <!-- Filtros -->
           <aside class="fvph-filters">
             <div class="fvph-filters__header">
               <strong><?php echo esc_html(number_format_i18n($q_products->found_posts)); ?></strong> produtos
@@ -216,10 +282,7 @@ class FVPH_Shortcodes {
             </details>
           </aside>
 
-          <!-- Conteúdo -->
           <section class="fvph-content">
-
-            <!-- Barra de busca -->
             <form class="fvph-toolbar" method="get">
               <div class="fvph-search">
                 <input type="search" name="q" value="<?php echo esc_attr($q); ?>" placeholder="Pesquisar produtos">
@@ -232,7 +295,6 @@ class FVPH_Shortcodes {
               ?>
             </form>
 
-            <!-- Grade 3 x 5 -->
             <div class="fvph-grid">
               <?php if ($q_products->have_posts()): while($q_products->have_posts()): $q_products->the_post();
                     $price = get_post_meta(get_the_ID(), '_fvph_price', true);
@@ -256,7 +318,6 @@ class FVPH_Shortcodes {
               <?php endif; wp_reset_postdata(); ?>
             </div>
 
-            <!-- Paginação -->
             <?php
               $total_pages = max(1, (int) $q_products->max_num_pages);
               if ($total_pages > 1):
@@ -286,12 +347,10 @@ class FVPH_Shortcodes {
                 <a class="fvph-page <?php echo $current>=$total_pages?'is-disabled':''; ?>" href="<?php echo $current<$total_pages ? $make_url($current+1) : '#'; ?>">&#10095;</a>
               </nav>
             <?php endif; ?>
-
           </section>
         </div>
 
         <script>
-        // Submete filtros ao marcar/desmarcar
         (function(){
           const aside = document.querySelector('.fvph-filters');
           if(!aside) return;
@@ -302,17 +361,14 @@ class FVPH_Shortcodes {
             const form = document.createElement('form');
             form.method = 'GET';
 
-            // mantém a busca atual
             const params = new URLSearchParams(window.location.search);
             const q = params.get('q');
             if (q) { const i=document.createElement('input'); i.type='hidden'; i.name='q'; i.value=q; form.appendChild(i); }
 
-            // reconstrói filtros marcados
             document.querySelectorAll('input[name="marca[]"]:checked').forEach(ch=>{ let i=document.createElement('input'); i.type='hidden'; i.name='marca[]'; i.value=ch.value; form.appendChild(i); });
             document.querySelectorAll('input[name="tipo[]"]:checked').forEach(ch=>{ let i=document.createElement('input'); i.type='hidden'; i.name='tipo[]'; i.value=ch.value; form.appendChild(i); });
             document.querySelectorAll('input[name="subs[]"]:checked').forEach(ch=>{ let i=document.createElement('input'); i.type='hidden'; i.name='subs[]'; i.value=ch.value; form.appendChild(i); });
 
-            // sempre volta pra página 1 quando muda filtro
             let iPag=document.createElement('input'); iPag.type='hidden'; iPag.name='pag'; iPag.value='1'; form.appendChild(iPag);
 
             document.body.appendChild(form);

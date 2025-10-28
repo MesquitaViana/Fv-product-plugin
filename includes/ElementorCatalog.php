@@ -1,7 +1,7 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
-/* Evita fatal se alguém incluir este arquivo cedo demais */
+/* Evita fatal se incluírem antes do Elementor */
 if (!class_exists('\Elementor\Widget_Base')) {
     return;
 }
@@ -14,7 +14,7 @@ class FVPH_ElementorCatalog extends Widget_Base {
     public function get_name() { return 'fvph_catalog_widget'; }
     public function get_title(){ return 'Catálogo FV (Filtro + Grid + Paginação)'; }
     public function get_icon() { return 'eicon-products'; }
-    public function get_categories(){ return ['general']; } // ajuste a categoria se tiver uma própria
+    public function get_categories(){ return ['general']; } // ajuste se tiver categoria própria
 
     protected function register_controls() {
         $this->start_controls_section('section_settings', [
@@ -51,7 +51,8 @@ class FVPH_ElementorCatalog extends Widget_Base {
         $this->end_controls_section();
     }
 
-    /** Helpers */
+    /* ========= Helpers ========= */
+
     protected static function get_tax_slugs(){
         $tax_marca = class_exists('FVPH_Synchronizer') ? FVPH_Synchronizer::TAX_MARCA : 'marca_prod';
         $tax_tipo  = class_exists('FVPH_Synchronizer') ? FVPH_Synchronizer::TAX_CATEG : 'categoria_prod';
@@ -107,60 +108,61 @@ class FVPH_ElementorCatalog extends Widget_Base {
         return [$terms_marca, $terms_tipo, $subs_values];
     }
 
+    /* ========= Partes do UI ========= */
+
+    /** NÃO envolve em <aside>; o wrapper é criado no render() */
     protected function render_filters($show_filters, $found_posts, $terms_marca, $terms_tipo, $subs_values, $filters){
         if ($show_filters !== 'yes') return;
         ?>
-        <aside class="fvph-filters">
-          <div class="fvph-filters__header">
-            <strong><?php echo esc_html(number_format_i18n($found_posts)); ?></strong> produtos
-            <a class="fvph-filters__reset" href="<?php echo esc_url( remove_query_arg(['q','marca','tipo','subs','pag']) ); ?>">
-              LIMPAR TODAS AS SELEÇÕES
-            </a>
+        <div class="fvph-filters__header">
+          <strong><?php echo esc_html(number_format_i18n($found_posts)); ?></strong> produtos
+          <a class="fvph-filters__reset" href="<?php echo esc_url( remove_query_arg(['q','marca','tipo','subs','pag']) ); ?>">
+            LIMPAR TODAS AS SELEÇÕES
+          </a>
+        </div>
+
+        <details class="fvph-accordion">
+          <summary>Melhores coleções</summary>
+          <div class="fvph-accordion__body">
+            <p class="fvph-muted">Coleções selecionadas (em breve)</p>
           </div>
+        </details>
 
-          <details class="fvph-accordion">
-            <summary>Melhores coleções</summary>
-            <div class="fvph-accordion__body">
-              <p class="fvph-muted">Coleções selecionadas (em breve)</p>
-            </div>
-          </details>
+        <details class="fvph-accordion">
+          <summary>Tipos de produtos</summary>
+          <div class="fvph-accordion__body">
+            <?php if ($terms_tipo) foreach($terms_tipo as $t): ?>
+              <label class="fvph-check">
+                <input type="checkbox" name="tipo[]" value="<?php echo esc_attr($t->slug); ?>" <?php checked(in_array($t->slug,$filters['tipo'],true)); ?>>
+                <span><?php echo esc_html($t->name); ?></span>
+              </label>
+            <?php endforeach; ?>
+          </div>
+        </details>
 
-          <details class="fvph-accordion">
-            <summary>Tipos de produtos</summary>
-            <div class="fvph-accordion__body">
-              <?php if ($terms_tipo) foreach($terms_tipo as $t): ?>
-                <label class="fvph-check">
-                  <input type="checkbox" name="tipo[]" value="<?php echo esc_attr($t->slug); ?>" <?php checked(in_array($t->slug,$filters['tipo'],true)); ?>>
-                  <span><?php echo esc_html($t->name); ?></span>
-                </label>
-              <?php endforeach; ?>
-            </div>
-          </details>
+        <details class="fvph-accordion">
+          <summary>Substância</summary>
+          <div class="fvph-accordion__body">
+            <?php if ($subs_values) foreach($subs_values as $v): ?>
+              <label class="fvph-check">
+                <input type="checkbox" name="subs[]" value="<?php echo esc_attr($v); ?>" <?php checked(in_array($v,$filters['subs'],true)); ?>>
+                <span><?php echo esc_html($v); ?></span>
+              </label>
+            <?php endforeach; ?>
+          </div>
+        </details>
 
-          <details class="fvph-accordion">
-            <summary>Substância</summary>
-            <div class="fvph-accordion__body">
-              <?php if ($subs_values) foreach($subs_values as $v): ?>
-                <label class="fvph-check">
-                  <input type="checkbox" name="subs[]" value="<?php echo esc_attr($v); ?>" <?php checked(in_array($v,$filters['subs'],true)); ?>>
-                  <span><?php echo esc_html($v); ?></span>
-                </label>
-              <?php endforeach; ?>
-            </div>
-          </details>
-
-          <details class="fvph-accordion">
-            <summary>Marcas</summary>
-            <div class="fvph-accordion__body fvph-scroll">
-              <?php if ($terms_marca) foreach($terms_marca as $t): ?>
-                <label class="fvph-check">
-                  <input type="checkbox" name="marca[]" value="<?php echo esc_attr($t->slug); ?>" <?php checked(in_array($t->slug,$filters['marca'],true)); ?>>
-                  <span><?php echo esc_html($t->name); ?></span>
-                </label>
-              <?php endforeach; ?>
-            </div>
-          </details>
-        </aside>
+        <details class="fvph-accordion">
+          <summary>Marcas</summary>
+          <div class="fvph-accordion__body fvph-scroll">
+            <?php if ($terms_marca) foreach($terms_marca as $t): ?>
+              <label class="fvph-check">
+                <input type="checkbox" name="marca[]" value="<?php echo esc_attr($t->slug); ?>" <?php checked(in_array($t->slug,$filters['marca'],true)); ?>>
+                <span><?php echo esc_html($t->name); ?></span>
+              </label>
+            <?php endforeach; ?>
+          </div>
+        </details>
         <?php
     }
 
@@ -195,7 +197,7 @@ class FVPH_ElementorCatalog extends Widget_Base {
               <?php if ($price): ?><div class="fvph-card__price">R$ <?php echo esc_html($price); ?></div><?php endif; ?>
               <div class="fvph-card__actions">
                 <a class="fvph-btn fvph-btn--ghost" href="<?php the_permalink(); ?>">Ver mais</a>
-                <?php if ($buy): ?><a class="fvph-btn fvph-btn--dark" href="<?php echo esc_url($buy); ?>" target="_blank" rel="noopener">Comprar</a><?php endif; ?>
+                <?php if ($buy): ?><a class="fvph-btn fvph-btn--dark" href="<?php echo esc_url($buy); ?>" target="_blank" rel="noopener nofollow sponsored">Comprar</a><?php endif; ?>
               </div>
             </article>
           <?php endwhile; else: ?>
@@ -209,11 +211,15 @@ class FVPH_ElementorCatalog extends Widget_Base {
         $total_pages = max(1, (int) $q->max_num_pages);
         if ($total_pages <= 1) return;
 
-        $base_args = $_GET; unset($base_args['pag']);
-        $make_url = function($page) use ($base_args){
+        // URL atual sem 'preview' e sem 'pag'
+        $current_url = remove_query_arg(['preview','pag']);
+        $base_args   = $_GET; unset($base_args['pag']);
+
+        $make_url = function($page) use ($base_args, $current_url){
             $args = array_merge($base_args, ['pag'=>$page]);
-            return esc_url( add_query_arg($args, remove_query_arg('preview', home_url( add_query_arg([]) ))) );
+            return esc_url( add_query_arg($args, $current_url) );
         };
+
         ?>
         <nav class="fvph-pagination" aria-label="Navegação de páginas">
           <a class="fvph-page <?php echo $current<=1?'is-disabled':''; ?>" href="<?php echo $current>1 ? $make_url($current-1) : '#'; ?>">&#10094;</a>
@@ -236,6 +242,7 @@ class FVPH_ElementorCatalog extends Widget_Base {
         <?php
     }
 
+    /* ========= Render principal ========= */
     protected function render() {
         [$tax_marca, $tax_tipo] = self::get_tax_slugs();
         $settings = $this->get_settings_for_display();
@@ -247,18 +254,41 @@ class FVPH_ElementorCatalog extends Widget_Base {
 
         echo '<div class="fvph-catalog" data-widget="fvph_catalog_widget">';
 
-        // Coluna de filtros
-        $this->render_filters($settings['show_filters'] ?? 'yes', $query->found_posts, $terms_marca, $terms_tipo, $subs_values, $filters);
+          // FILTROS (coluna / vira topo no mobile)
+          if (!empty($settings['show_filters']) && $settings['show_filters'] === 'yes') {
+              echo '<aside class="fvph-filters">';
+              $this->render_filters(
+                  $settings['show_filters'],
+                  $query->found_posts,
+                  $terms_marca,
+                  $terms_tipo,
+                  $subs_values,
+                  $filters
+              );
+              echo '</aside>';
+          }
 
-        // Conteúdo (busca + grid + paginação)
-        echo '<section class="fvph-content">';
-        $this->render_toolbar($settings['show_search'] ?? 'yes', $filters);
-        $this->render_grid($query);
-        $this->render_pagination($query, $filters['paged']);
-        echo '</section>';
+          // CONTEÚDO PRINCIPAL
+          echo '<section class="fvph-content">';
+
+              // Toolbar (busca)
+              if (!empty($settings['show_search']) && $settings['show_search'] === 'yes') {
+                  echo '<div class="fvph-toolbar">';
+                  $this->render_toolbar($settings['show_search'], $filters);
+                  echo '</div>';
+              }
+
+              // Grid
+              $this->render_grid($query);
+
+              // Paginação
+              $this->render_pagination($query, $filters['paged']);
+
+          echo '</section>';
 
         echo '</div>';
         ?>
+
         <script>
         // Submete filtros ao marcar/desmarcar
         (function(){

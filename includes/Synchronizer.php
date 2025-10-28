@@ -53,6 +53,13 @@ class FVPH_Synchronizer {
             wp_update_post($postarr);
         }
 
+        // Se marcado como manual, não sobrescreve nada
+        $skip = get_post_meta($post_id, '_fvph_manual', true) === '1';
+        if ($skip) {
+        return $post_id;
+        }
+
+
         if(!empty($p['images'])) self::sideload_all_images($p['images'], $post_id);
 
         if(isset($p['price'])) update_post_meta($post_id,'_fvph_price',$p['price']);

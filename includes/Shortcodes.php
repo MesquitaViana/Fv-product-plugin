@@ -15,32 +15,35 @@ class FVPH_Shortcodes {
         if(!empty($a['category'])){
             $args['tax_query'][] = [
                 'taxonomy'=>'categoria_prod',
-                'field'=>'slug',
-                'terms'=> sanitize_title($a['category'])
+                'field'   =>'slug',
+                'terms'   => sanitize_title($a['category'])
             ];
         }
         if(!empty($a['brand'])){
             $args['tax_query'][] = [
                 'taxonomy'=>'marca_prod',
-                'field'=>'slug',
-                'terms'=> sanitize_title($a['brand'])
+                'field'   =>'slug',
+                'terms'   => sanitize_title($a['brand'])
             ];
         }
         $order_by = strtolower($a['order_by']);
-        $order = $a['order'] === 'ASC' ? 'ASC' : 'DESC';
+        $order    = ($a['order'] === 'ASC') ? 'ASC' : 'DESC';
+
         if($order_by === 'title'){
             $args['orderby'] = 'title';
-            $args['order'] = $order;
+            $args['order']   = $order;
         } elseif($order_by === 'rating'){
-            $args['meta_key'] = '_fvph_rating';
+            $args['meta_key']= '_fvph_rating';
             $args['orderby'] = 'meta_value_num';
-            $args['order'] = $order;
+            $args['order']   = $order;
         } elseif($order_by === 'sticky_first'){
-            $args['meta_key'] = '_fvph_sticky';
-            $args['orderby'] = ['meta_value_num'=>$order, 'date'=>$order];
+            $args['meta_key']= '_fvph_sticky';
+            // WP aceita array só em versões mais novas; fallback:
+            $args['orderby'] = 'meta_value_num date';
+            $args['order']   = $order;
         } else {
             $args['orderby'] = 'date';
-            $args['order'] = $order;
+            $args['order']   = $order;
         }
         return $args;
     }
@@ -61,12 +64,12 @@ class FVPH_Shortcodes {
         ob_start();
         echo '<div class="fv-grid">';
         while($q->have_posts()){ $q->the_post();
-            $price = get_post_meta(get_the_ID(), '_fvph_price', true);
-            $buy   = get_post_meta(get_the_ID(), '_fvph_buy_url', true);
-            $puffs = get_post_meta(get_the_ID(), '_fvph_attr_puffs', true);
-            $nic   = get_post_meta(get_the_ID(), '_fvph_attr_nicotina', true);
-            $bat   = get_post_meta(get_the_ID(), '_fvph_attr_bateria', true);
-            $rating= get_post_meta(get_the_ID(), '_fvph_rating', true);
+            $price  = get_post_meta(get_the_ID(), '_fvph_price', true);
+            $buy    = get_post_meta(get_the_ID(), '_fvph_buy_url', true);
+            $puffs  = get_post_meta(get_the_ID(), '_fvph_attr_puffs', true);
+            $nic    = get_post_meta(get_the_ID(), '_fvph_attr_nicotina', true);
+            $bat    = get_post_meta(get_the_ID(), '_fvph_attr_bateria', true);
+            $rating = get_post_meta(get_the_ID(), '_fvph_rating', true);
             ?>
             <article class="fv-card">
               <a class="fv-thumb" href="<?php the_permalink(); ?>"><?php the_post_thumbnail('medium'); ?></a>

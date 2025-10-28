@@ -2,10 +2,18 @@
 if (!defined('ABSPATH')) exit;
 
 class FVPH_Shortcodes {
+
     public static function register(){
+        // já existente (mantido)
         add_shortcode('fv_products', [__CLASS__, 'products']);
+
+        // novo catálogo completo (filtro + busca + paginação)
+        add_shortcode('fvph_catalog', [__CLASS__, 'catalog']);
     }
 
+    /* =========================================================
+     *  SHORTCODE ANTIGO (mantido): [fv_products]
+     * =======================================================*/
     protected static function build_query_args($a){
         $args = [
             'post_type'      => 'produto',
@@ -38,7 +46,6 @@ class FVPH_Shortcodes {
             $args['order']   = $order;
         } elseif($order_by === 'sticky_first'){
             $args['meta_key']= '_fvph_sticky';
-            // WP aceita array só em versões mais novas; fallback:
             $args['orderby'] = 'meta_value_num date';
             $args['order']   = $order;
         } else {
@@ -90,6 +97,230 @@ class FVPH_Shortcodes {
         }
         echo '</div>';
         wp_reset_postdata();
+        return ob_get_clean();
+    }
+
+    /* =========================================================
+     *  NOVO SHORTCODE: [fvph_catalog]
+     *  Filtros responsivos + busca + paginação + grade 3x5
+     * =======================================================*/
+    public static function catalog($atts = []){
+        $atts = shortcode_atts([
+            'per_page' => 15, // 3 colunas x 5 linhas
+        ], $atts, 'fvph_catalog');
+
+        $per_page = max(1, (int)$atts['per_page']);
+
+        // Taxonomias (usa as do Synchronizer se existirem)
+        $tax_marca = class_exists('FVPH_Synchronizer') ? FVPH_Synchronizer::TAX_MARCA : 'marca_prod';
+        $tax_tipo  = class_exists('FVPH_Synchronizer') ? FVPH_Synchronizer::TAX_CATEG : 'categoria_prod';
+
+        // Inputs (GET)
+        $q     = isset($_GET['q']) ? sanitize_text_field(wp_unslash($_GET['q'])) : '';
+        $marca = (isset($_GET['marca']) && is_array($_GET['marca'])) ? array_map('sanitize_title', $_GET['marca']) : [];
+        $tipo  = (isset($_GET['tipo'])  && is_array($_GET['tipo']))  ? array_map('sanitize_title', $_GET['tipo'])  : [];
+        $subs  = (isset($_GET['subs'])  && is_array($_GET['subs']))  ? array_map('sanitize_text_field', $_GET['subs']) : [];
+        $paged = isset($_GET['pag']) ? max(1, (int)$_GET['pag']) : max(1, get_query_var('paged', 1));
+
+        // tax/meta query
+        $tax_query = ['relation' => 'AND'];
+        if ($marca) $tax_query[] = ['taxonomy'=>$tax_marca,'field'=>'slug','terms'=>$marca];
+        if ($tipo)  $tax_query[] = ['taxonomy'=>$tax_tipo, 'field'=>'slug','terms'=>$tipo];
+
+        $meta_query = ['relation' => 'AND'];
+        if ($subs)  $meta_query[] = ['key'=>'_fvph_attr_substancia','value'=>$subs,'compare'=>'IN'];
+
+        // query principal
+        $args = [
+            'post_type'      => 'produto',
+            'post_status'    => 'publish',
+            's'              => $q,
+            'posts_per_page' => $per_page,
+            'paged'          => $paged,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+        ];
+        if (count($tax_query)  > 1) $args['tax_query']  = $tax_query;
+        if (count($meta_query) > 1) $args['meta_query'] = $meta_query;
+
+        $q_products = new WP_Query($args);
+
+        // termos para filtros
+        $terms_marca = get_terms(['taxonomy'=>$tax_marca,'hide_empty'=>true,'number'=>1000]);
+        $terms_tipo  = get_terms(['taxonomy'=>$tax_tipo, 'hide_empty'=>true,'number'=>1000]);
+
+        // valores distintos de Substância (meta)
+        global $wpdb;
+        $subs_values = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT meta_value 
+             FROM {$wpdb->postmeta} pm 
+             INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+             WHERE pm.meta_key = %s AND p.post_type = %s AND p.post_status='publish'
+             ORDER BY meta_value ASC",
+            '_fvph_attr_substancia','produto'
+        ));
+        $subs_values = array_values(array_filter(array_map('trim', (array)$subs_values)));
+
+        ob_start(); ?>
+        <div class="fvph-catalog">
+          <!-- Filtros -->
+          <aside class="fvph-filters">
+            <div class="fvph-filters__header">
+              <strong><?php echo esc_html(number_format_i18n($q_products->found_posts)); ?></strong> produtos
+              <a class="fvph-filters__reset" href="<?php echo esc_url( remove_query_arg(['q','marca','tipo','subs','pag']) ); ?>">
+                LIMPAR TODAS AS SELEÇÕES
+              </a>
+            </div>
+
+            <details class="fvph-accordion">
+              <summary>Melhores coleções</summary>
+              <div class="fvph-accordion__body">
+                <p class="fvph-muted">Coleções selecionadas (em breve)</p>
+              </div>
+            </details>
+
+            <details class="fvph-accordion">
+              <summary>Tipos de produtos</summary>
+              <div class="fvph-accordion__body">
+                <?php if ($terms_tipo) foreach($terms_tipo as $t): ?>
+                  <label class="fvph-check">
+                    <input type="checkbox" name="tipo[]" value="<?php echo esc_attr($t->slug); ?>" <?php checked(in_array($t->slug,$tipo,true)); ?>>
+                    <span><?php echo esc_html($t->name); ?></span>
+                  </label>
+                <?php endforeach; ?>
+              </div>
+            </details>
+
+            <details class="fvph-accordion">
+              <summary>Substância</summary>
+              <div class="fvph-accordion__body">
+                <?php if ($subs_values) foreach($subs_values as $v): ?>
+                  <label class="fvph-check">
+                    <input type="checkbox" name="subs[]" value="<?php echo esc_attr($v); ?>" <?php checked(in_array($v,$subs,true)); ?>>
+                    <span><?php echo esc_html($v); ?></span>
+                  </label>
+                <?php endforeach; ?>
+              </div>
+            </details>
+
+            <details class="fvph-accordion">
+              <summary>Marcas</summary>
+              <div class="fvph-accordion__body fvph-scroll">
+                <?php if ($terms_marca) foreach($terms_marca as $t): ?>
+                  <label class="fvph-check">
+                    <input type="checkbox" name="marca[]" value="<?php echo esc_attr($t->slug); ?>" <?php checked(in_array($t->slug,$marca,true)); ?>>
+                    <span><?php echo esc_html($t->name); ?></span>
+                  </label>
+                <?php endforeach; ?>
+              </div>
+            </details>
+          </aside>
+
+          <!-- Conteúdo -->
+          <section class="fvph-content">
+
+            <!-- Barra de busca -->
+            <form class="fvph-toolbar" method="get">
+              <div class="fvph-search">
+                <input type="search" name="q" value="<?php echo esc_attr($q); ?>" placeholder="Pesquisar produtos">
+                <button type="submit" class="fvph-btn fvph-btn--dark">Buscar</button>
+              </div>
+              <?php
+                foreach ($marca as $m) echo '<input type="hidden" name="marca[]" value="'.esc_attr($m).'">';
+                foreach ($tipo  as $t) echo '<input type="hidden" name="tipo[]"  value="'.esc_attr($t).'">';
+                foreach ($subs  as $s) echo '<input type="hidden" name="subs[]"  value="'.esc_attr($s).'">';
+              ?>
+            </form>
+
+            <!-- Grade 3 x 5 -->
+            <div class="fvph-grid">
+              <?php if ($q_products->have_posts()): while($q_products->have_posts()): $q_products->the_post();
+                    $price = get_post_meta(get_the_ID(), '_fvph_price', true);
+                    $buy   = get_post_meta(get_the_ID(), '_fvph_buy_url', true);
+              ?>
+                <article class="fvph-card">
+                  <a class="fvph-card__thumb" href="<?php the_permalink(); ?>">
+                    <?php if (has_post_thumbnail()) the_post_thumbnail('medium'); ?>
+                  </a>
+                  <h3 class="fvph-card__title"><a href="<?php the_permalink(); ?>"><?php the_title(); ?></a></h3>
+                  <?php if ($price): ?><div class="fvph-card__price">R$ <?php echo esc_html($price); ?></div><?php endif; ?>
+                  <div class="fvph-card__actions">
+                    <a class="fvph-btn fvph-btn--ghost" href="<?php the_permalink(); ?>">Ver mais</a>
+                    <?php if ($buy): ?>
+                      <a class="fvph-btn fvph-btn--dark" href="<?php echo esc_url($buy); ?>" target="_blank" rel="noopener">Comprar</a>
+                    <?php endif; ?>
+                  </div>
+                </article>
+              <?php endwhile; else: ?>
+                <p class="fvph-muted">Nenhum produto encontrado.</p>
+              <?php endif; wp_reset_postdata(); ?>
+            </div>
+
+            <!-- Paginação -->
+            <?php
+              $total_pages = max(1, (int) $q_products->max_num_pages);
+              if ($total_pages > 1):
+                $current = $paged;
+                $base_args = $_GET; unset($base_args['pag']);
+                $make_url = function($page) use ($base_args){
+                  $args = array_merge($base_args, ['pag'=>$page]);
+                  return esc_url( add_query_arg($args, remove_query_arg('preview', home_url( add_query_arg([]) ))) );
+                };
+            ?>
+              <nav class="fvph-pagination" aria-label="Navegação de páginas">
+                <a class="fvph-page <?php echo $current<=1?'is-disabled':''; ?>" href="<?php echo $current>1 ? $make_url($current-1) : '#'; ?>">&#10094;</a>
+                <?php
+                $window = 2; $pages = [];
+                for($i=1;$i<=$total_pages;$i++){
+                    if ($i==1 || $i==$total_pages || ($i >= $current-$window && $i <= $current+$window)) $pages[]=$i;
+                    elseif (end($pages) !== '…') $pages[]='…';
+                }
+                foreach ($pages as $p){
+                    if ($p==='…'){ echo '<span class="fvph-page fvph-ellipsis">…</span>'; }
+                    else {
+                        $cls = 'fvph-page'.($p==$current?' is-active':'');
+                        echo '<a class="'.$cls.'" href="'.$make_url($p).'">'.(int)$p.'</a>';
+                    }
+                }
+                ?>
+                <a class="fvph-page <?php echo $current>=$total_pages?'is-disabled':''; ?>" href="<?php echo $current<$total_pages ? $make_url($current+1) : '#'; ?>">&#10095;</a>
+              </nav>
+            <?php endif; ?>
+
+          </section>
+        </div>
+
+        <script>
+        // Submete filtros ao marcar/desmarcar
+        (function(){
+          const aside = document.querySelector('.fvph-filters');
+          if(!aside) return;
+          aside.addEventListener('change', function(ev){
+            const input = ev.target;
+            if (!input || (['marca[]','tipo[]','subs[]'].indexOf(input.name) === -1)) return;
+
+            const form = document.createElement('form');
+            form.method = 'GET';
+
+            // mantém a busca atual
+            const params = new URLSearchParams(window.location.search);
+            const q = params.get('q');
+            if (q) { const i=document.createElement('input'); i.type='hidden'; i.name='q'; i.value=q; form.appendChild(i); }
+
+            // reconstrói filtros marcados
+            document.querySelectorAll('input[name="marca[]"]:checked').forEach(ch=>{ let i=document.createElement('input'); i.type='hidden'; i.name='marca[]'; i.value=ch.value; form.appendChild(i); });
+            document.querySelectorAll('input[name="tipo[]"]:checked').forEach(ch=>{ let i=document.createElement('input'); i.type='hidden'; i.name='tipo[]'; i.value=ch.value; form.appendChild(i); });
+            document.querySelectorAll('input[name="subs[]"]:checked').forEach(ch=>{ let i=document.createElement('input'); i.type='hidden'; i.name='subs[]'; i.value=ch.value; form.appendChild(i); });
+
+            // sempre volta pra página 1 quando muda filtro
+            let iPag=document.createElement('input'); iPag.type='hidden'; iPag.name='pag'; iPag.value='1'; form.appendChild(iPag);
+
+            document.body.appendChild(form);
+            form.submit();
+          });
+        })();
+        </script>
+        <?php
         return ob_get_clean();
     }
 }

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: FV Product Hub
  * Description: Hub de produtos do Fórum do Vapor (Woo sync, cards, Elementor, carrossel, schema, specs).
- * Version: 0.5.0
+ * Version: 0.5.1
  * Author: Forum do Vapor
  * License: GPL-2.0+
  * Text Domain: fv-product-hub
@@ -10,43 +10,72 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('FVPH_VER', '0.5.0');
+define('FVPH_VER',  '0.5.1');
 define('FVPH_PATH', plugin_dir_path(__FILE__));
-define('FVPH_URL', plugin_dir_url(__FILE__));
+define('FVPH_URL',  plugin_dir_url(__FILE__));
 
+/** Autoloader: classes FVPH_* -> includes/<Class>.php */
 spl_autoload_register(function($class){
-    if(strpos($class, 'FVPH_') === 0){
+    if (strpos($class, 'FVPH_') === 0) {
         $file = FVPH_PATH . 'includes/' . str_replace('FVPH_', '', $class) . '.php';
-        if(file_exists($file)) require_once $file;
+        if (file_exists($file)) require_once $file;
     }
 });
 
+/** Assets de front */
 add_action('wp_enqueue_scripts', function(){
-    wp_enqueue_style('fvph-style', FVPH_URL.'assets/css/style.css', [], FVPH_VER);
-    wp_enqueue_script('fvph-carousel', FVPH_URL.'assets/js/carousel.js', [], FVPH_VER, true);
+    wp_enqueue_style ('fvph-style',    FVPH_URL . 'assets/css/style.css', [], FVPH_VER);
+    wp_enqueue_script('fvph-carousel', FVPH_URL . 'assets/js/carousel.js', [], FVPH_VER, true);
 });
 
+/** Admin (settings/menu) */
 add_action('admin_init', ['FVPH_Admin', 'register_settings']);
 add_action('admin_menu', ['FVPH_Admin', 'register_menu']);
 
-add_action('init', ['FVPH_CPT', 'register_types']);
-add_action('init', ['FVPH_Shortcodes', 'register']);
-add_action('add_meta_boxes', ['FVPH_Metabox', 'register']);
-add_action('save_post_produto', ['FVPH_Metabox', 'save']);
+/** Registro do CPT/shortcodes/metabox */
+add_action('init',               ['FVPH_CPT',        'register_types']);
+add_action('init',               ['FVPH_Shortcodes', 'register']);
+add_action('add_meta_boxes',     ['FVPH_Metabox',    'register']);
+add_action('save_post_produto',  ['FVPH_Metabox',    'save']);
 
-// Elementor widget
-add_action('elementor/widgets/register', ['FVPH_ElementorWidget', 'register_widget']);
-
-add_action('fvph_sync_run', ['FVPH_Synchronizer', 'run']);
-register_activation_hook(__FILE__, function(){
-    if(!wp_next_scheduled('fvph_sync_run')){
-        wp_schedule_event(time()+60, 'twicedaily', 'fvph_sync_run');
+/** Elementor (carrega apenas se Elementor estiver ativo) */
+add_action('plugins_loaded', function(){
+    if (did_action('elementor/loaded')) {
+        // Widget de grade que você já utilizava
+        if (class_exists('FVPH_ElementorWidget')) {
+            add_action('elementor/widgets/register', ['FVPH_ElementorWidget', 'register_widget']);
+        }
+        // Novo widget: Catálogo (filtros + busca + paginação + grid 3x5)
+        $catalog_widget_file = FVPH_PATH . 'includes/ElementorCatalog.php';
+        if (file_exists($catalog_widget_file)) {
+            require_once $catalog_widget_file;
+            if (class_exists('FVPH_ElementorCatalog')) {
+                add_action('elementor/widgets/register', ['FVPH_ElementorCatalog', 'register_widget']);
+            }
+        }
     }
 });
-register_deactivation_hook(__FILE__, function(){
-    $ts = wp_next_scheduled('fvph_sync_run');
-    if($ts) wp_unschedule_event($ts, 'fvph_sync_run');
+
+/** Cron de sincronização */
+add_action('fvph_sync_run', ['FVPH_Synchronizer', 'run']);
+
+register_activation_hook(__FILE__, function(){
+    // registra CPT antes do flush (evita 404 ao ativar)
+    if (class_exists('FVPH_CPT')) {
+        FVPH_CPT::register_types();
+    }
+    if (!wp_next_scheduled('fvph_sync_run')) {
+        wp_schedule_event(time()+60, 'twicedaily', 'fvph_sync_run');
+    }
+    flush_rewrite_rules();
 });
 
-// Template loader
+register_deactivation_hook(__FILE__, function(){
+    if ($ts = wp_next_scheduled('fvph_sync_run')) {
+        wp_unschedule_event($ts, 'fvph_sync_run');
+    }
+    flush_rewrite_rules();
+});
+
+/** Template loader (single/lista do CPT) */
 add_filter('template_include', ['FVPH_Template', 'maybe_load'], 20);

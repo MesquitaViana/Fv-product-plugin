@@ -167,7 +167,7 @@ class FVPH_Synchronizer {
             'post_title'   => $name,
             'post_name'    => $slug,
             'post_type'    => 'produto',
-            'post_status'  => 'publish',
+            'post_status'  => 'draft',
             'post_content' => $content,
         ];
 

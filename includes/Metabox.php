@@ -3,10 +3,18 @@ if (!defined('ABSPATH')) exit;
 
 class FVPH_Metabox {
     public static function register(){
-        add_meta_box('fvph_meta','Dados do Produto (FV)','\\FVPH_Metabox::render','produto','side','default');
+        add_meta_box(
+            'fvph_meta',
+            'Dados do Produto (FV)',
+            '\\FVPH_Metabox::render',
+            'produto',
+            'side',
+            'default'
+        );
     }
 
     public static function render($post){
+        // Metas existentes
         $rating       = get_post_meta($post->ID,'_fvph_rating',true);
         $sticky       = get_post_meta($post->ID,'_fvph_sticky',true);
         $sku          = get_post_meta($post->ID,'_fvph_sku',true);
@@ -20,11 +28,20 @@ class FVPH_Metabox {
         $buy_label    = get_post_meta($post->ID,'_fvph_buy_label',true);
         $partner_logo = get_post_meta($post->ID,'_fvph_partner_logo',true); // attachment ID
 
+        // Aprovação
+        $approved     = get_post_meta($post->ID,'_fvph_approved',true) === '1';
+
         wp_nonce_field('fvph_meta_save','fvph_meta_nonce');
         ?>
-        <p><label><input type="checkbox" name="fvph_manual" value="1" <?php checked($manual,'1'); ?>> Produto manual (não sobrescrever pela sincronização)</label></p>
+        <p>
+            <label>
+                <input type="checkbox" name="fvph_manual" value="1" <?php checked($manual,'1'); ?>>
+                Produto manual (não sobrescrever pela sincronização)
+            </label>
+        </p>
 
         <hr>
+
         <p><strong>Parceria</strong></p>
         <p><label>Nome do parceiro:<br>
             <input type="text" name="fvph_partner_name" value="<?php echo esc_attr($partner); ?>" style="width:100%">
@@ -43,6 +60,7 @@ class FVPH_Metabox {
         </label></p>
 
         <hr>
+
         <p><strong>Comercial</strong></p>
         <p><label>Preço (R$):<br>
             <input type="text" name="fvph_price" value="<?php echo esc_attr($price); ?>" style="width:100%" placeholder="618.31">
@@ -52,9 +70,21 @@ class FVPH_Metabox {
         </label></p>
 
         <hr>
+
         <p><strong>Editorial</strong></p>
         <p><label>Rating (0–5): <input type="number" step="0.1" min="0" max="5" name="fvph_rating" value="<?php echo esc_attr($rating); ?>" style="width:80px"></label></p>
         <p><label><input type="checkbox" name="fvph_sticky" value="1" <?php checked($sticky,'1'); ?>> Destaque (aparece primeiro)</label></p>
+
+        <hr>
+
+        <p><strong>Aprovação</strong></p>
+        <p>
+            <label>
+                <input type="checkbox" name="fvph_approved" value="1" <?php checked($approved,true); ?>>
+                Aprovado para publicação
+            </label>
+        </p>
+        <p class="description">Marque para considerar este produto aprovado. Ao salvar, se não estiver publicado, será publicado automaticamente.</p>
         <?php
     }
 
@@ -62,6 +92,7 @@ class FVPH_Metabox {
         if(!isset($_POST['fvph_meta_nonce']) || !wp_verify_nonce($_POST['fvph_meta_nonce'],'fvph_meta_save')) return;
         if(defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
         if(!current_user_can('edit_post',$post_id)) return;
+        if(get_post_type($post_id) !== 'produto') return;
 
         $get = function($key,$cb){
             return isset($_POST[$key]) ? call_user_func($cb, $_POST[$key]) : '';
@@ -88,5 +119,20 @@ class FVPH_Metabox {
         // Editorial
         $rating = isset($_POST['fvph_rating']) && $_POST['fvph_rating']!=='' ? floatval($_POST['fvph_rating']) : '';
         if($rating===''){ delete_post_meta($post_id,'_fvph_rating'); } else { update_post_meta($post_id,'_fvph_rating',$rating); }
+
+        // Aprovação
+        $approved = !empty($_POST['fvph_approved']) ? '1' : '0';
+        update_post_meta($post_id,'_fvph_approved',$approved);
+
+        // Publica automaticamente quando aprovado
+        if ($approved === '1' && get_post_status($post_id) !== 'publish') {
+            // evita loop de save
+            remove_action('save_post_produto', ['FVPH_Metabox','save']);
+            wp_update_post([
+                'ID'          => $post_id,
+                'post_status' => 'publish',
+            ]);
+            add_action('save_post_produto', ['FVPH_Metabox','save']);
+        }
     }
 }

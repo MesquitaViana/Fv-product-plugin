@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) exit;
 
 class FVPH_Metabox {
     public static function register(){
-        add_meta_box('fvph_meta','Dados do Hub (FV)','\FVPH_Metabox::render','equipamento','side','default');
+        add_meta_box('fvph_meta','Dados do Hub (FV)','\FVPH_Metabox::render','produto','side','default');
     }
     public static function render($post){
         $rating = get_post_meta($post->ID,'_fvph_rating',true);

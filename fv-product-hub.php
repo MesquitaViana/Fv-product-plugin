@@ -32,7 +32,7 @@ add_action('admin_menu', ['FVPH_Admin', 'register_menu']);
 add_action('init', ['FVPH_CPT', 'register_types']);
 add_action('init', ['FVPH_Shortcodes', 'register']);
 add_action('add_meta_boxes', ['FVPH_Metabox', 'register']);
-add_action('save_post_equipamento', ['FVPH_Metabox', 'save']);
+add_action('save_post_produto', ['FVPH_Metabox', 'save']);
 
 // Elementor widget
 add_action('elementor/widgets/register', ['FVPH_ElementorWidget', 'register_widget']);

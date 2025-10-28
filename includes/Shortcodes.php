@@ -8,20 +8,20 @@ class FVPH_Shortcodes {
 
     protected static function build_query_args($a){
         $args = [
-            'post_type'      => 'equipamento',
+            'post_type'      => 'produto',
             'posts_per_page' => intval($a['limit']),
             'tax_query'      => [],
         ];
         if(!empty($a['category'])){
             $args['tax_query'][] = [
-                'taxonomy'=>'categoria_equip',
+                'taxonomy'=>'categoria_prod',
                 'field'=>'slug',
                 'terms'=> sanitize_title($a['category'])
             ];
         }
         if(!empty($a['brand'])){
             $args['tax_query'][] = [
-                'taxonomy'=>'marca_equip',
+                'taxonomy'=>'marca_prod',
                 'field'=>'slug',
                 'terms'=> sanitize_title($a['brand'])
             ];

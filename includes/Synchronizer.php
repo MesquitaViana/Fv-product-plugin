@@ -38,12 +38,12 @@ class FVPH_Synchronizer {
 
     protected static function upsert($p){
         $slug = sanitize_title(!empty($p['slug'])?$p['slug']:$p['name']);
-        $exists = get_page_by_path($slug, OBJECT, 'equipamento');
+        $exists = get_page_by_path($slug, OBJECT, 'produto');
 
         $postarr = [
             'post_title'  => $p['name'],
             'post_name'   => $slug,
-            'post_type'   => 'equipamento',
+            'post_type'   => 'produto',
             'post_status' => 'publish',
             'post_content'=> wp_kses_post($p['description'] ?: $p['short_description'])
         ];
@@ -68,11 +68,11 @@ class FVPH_Synchronizer {
                     $brands = is_array($att['options']) ? $att['options'] : [$att['options']];
                     $brands_slugs = array_map(function($b){ return sanitize_title($b); }, $brands);
                     foreach($brands_slugs as $slug_b){
-                        if(!term_exists($slug_b, 'marca_equip')){
-                            wp_insert_term(ucwords(str_replace('-', ' ', $slug_b)), 'marca_equip', ['slug'=>$slug_b]);
+                        if(!term_exists($slug_b, 'marca_prod')){
+                            wp_insert_term(ucwords(str_replace('-', ' ', $slug_b)), 'marca_prod', ['slug'=>$slug_b]);
                         }
                     }
-                    wp_set_object_terms($post_id, $brands_slugs, 'marca_equip', false);
+                    wp_set_object_terms($post_id, $brands_slugs, 'marca_prod', false);
                 }
             }
         }
@@ -81,11 +81,11 @@ class FVPH_Synchronizer {
             $terms = array_map(function($c){ return sanitize_title($c['name']); }, $p['categories']);
             if(!empty($terms)){
                 foreach($terms as $t){
-                    if(!term_exists($t, 'categoria_equip')){
-                        wp_insert_term(ucwords(str_replace('-', ' ', $t)), 'categoria_equip', ['slug'=>$t]);
+                    if(!term_exists($t, 'categoria_prod')){
+                        wp_insert_term(ucwords(str_replace('-', ' ', $t)), 'categoria_prod', ['slug'=>$t]);
                     }
                 }
-                wp_set_object_terms($post_id, $terms, 'categoria_equip', false);
+                wp_set_object_terms($post_id, $terms, 'categoria_prod', false);
             }
         }
         return $post_id;

@@ -23,3 +23,7 @@ Hub de produtos do Fórum do Vapor. **v0.5**: carrossel com autoplay, Product Sc
 * JSON-LD Product Schema no single.
 * Tabela de especificações dinâmica.
 * Sync passa a armazenar **SKU** em `_fvph_sku`.
+
+## Documentação do Desenvolvedor
+Veja a documentação completa de desenvolvimento e arquitetura em  
+👉 [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)

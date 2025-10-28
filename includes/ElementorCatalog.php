@@ -1,6 +1,11 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+/* Evita fatal se alguém incluir este arquivo cedo demais */
+if (!class_exists('\Elementor\Widget_Base')) {
+    return;
+}
+
 use Elementor\Controls_Manager;
 use Elementor\Widget_Base;
 

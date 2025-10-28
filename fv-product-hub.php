@@ -39,22 +39,34 @@ add_action('add_meta_boxes',     ['FVPH_Metabox',    'register']);
 add_action('save_post_produto',  ['FVPH_Metabox',    'save']);
 
 /** Elementor (carrega apenas se Elementor estiver ativo) */
-add_action('plugins_loaded', function(){
-    if (did_action('elementor/loaded')) {
-        // Widget de grade que você já utilizava
+/** Elementor (carrega só depois do Elementor e registra dentro do hook certo) */
+add_action('plugins_loaded', function () {
+    if (!did_action('elementor/loaded') || !class_exists('\Elementor\Plugin')) {
+        return; // Elementor não está ativo/carregado
+    }
+
+    // Registra widgets dentro do hook do Elementor
+    add_action('elementor/widgets/register', function($widgets_manager){
+
+        // Widget de grade antigo (se existir)
         if (class_exists('FVPH_ElementorWidget')) {
-            add_action('elementor/widgets/register', ['FVPH_ElementorWidget', 'register_widget']);
+            // aceita método estático ou instância; mantenho a assinatura que você usa
+            FVPH_ElementorWidget::register_widget($widgets_manager);
         }
-        // Novo widget: Catálogo (filtros + busca + paginação + grid 3x5)
-        $catalog_widget_file = FVPH_PATH . 'includes/ElementorCatalog.php';
-        if (file_exists($catalog_widget_file)) {
-            require_once $catalog_widget_file;
+
+        // Novo widget: Catálogo (filtros + busca + paginação)
+        $file = FVPH_PATH . 'includes/ElementorCatalog.php';
+        if (file_exists($file)) {
+            require_once $file; // agora é seguro: Elementor já está carregado
             if (class_exists('FVPH_ElementorCatalog')) {
-                add_action('elementor/widgets/register', ['FVPH_ElementorCatalog', 'register_widget']);
+                // registra via instância (API moderna do Elementor)
+                $widgets_manager->register( new \FVPH_ElementorCatalog() );
             }
         }
-    }
+    });
 });
+
+
 
 /** Cron de sincronização */
 add_action('fvph_sync_run', ['FVPH_Synchronizer', 'run']);

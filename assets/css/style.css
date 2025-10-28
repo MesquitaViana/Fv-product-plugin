@@ -1,0 +1,36 @@
+.fv-grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.fv-card{border:1px solid #eee;border-radius:16px;padding:14px;box-shadow:0 6px 18px rgba(0,0,0,.05);background:#fff}
+.fv-thumb img{border-radius:12px;display:block;width:100%;height:auto}
+.fv-title{font-size:1.05rem;margin:.6rem 0}
+.fv-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}
+.fv-chip{font-size:.82rem;padding:.28rem .55rem;border:1px solid #e5e7eb;border-radius:999px}
+.fv-price{font-weight:700;margin:.4rem 0}
+.fv-actions{display:flex;gap:.5rem;margin-top:.5rem;flex-wrap:wrap}
+.fv-btn{display:inline-block;padding:.5rem .8rem;border-radius:10px;background:#111;color:#fff;text-decoration:none}
+.fv-btn-outline{background:#fff;color:#111;border:1px solid #111}
+.fv-btn:hover{filter:brightness(1.05)}
+/* Single layout */
+.fvph-single .fvph-hero{display:grid;gap:24px;grid-template-columns:1fr;align-items:start;margin:20px 0}
+@media(min-width:900px){.fvph-single .fvph-hero{grid-template-columns:1fr 1.2fr}}
+.fvph-hero-media img{border-radius:16px}
+.fvph-title{font-size:1.8rem;margin:.2rem 0 .6rem}
+.fvph-price{margin-top:.2rem}
+.fvph-cta{margin-top:.6rem}
+.fvph-content{margin:24px 0}
+.fvph-footer{margin:28px 0 10px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.fv-meta-term{opacity:.9}
+/* Carousel */
+.fvph-carousel{position:relative;overflow:hidden;border-radius:16px}
+.fvph-carousel .fvph-track{display:flex;transition:transform .3s ease}
+.fvph-carousel .fvph-slide{min-width:100%;flex:0 0 100%}
+.fvph-carousel .fvph-nav{position:absolute;top:50%;transform:translateY(-50%);background:#fff;border:1px solid #e5e7eb;border-radius:999px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+.fvph-carousel .prev{left:10px}
+.fvph-carousel .next{right:10px}
+.fvph-thumbs{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.fvph-thumb{border:1px solid #e5e7eb;border-radius:8px;padding:0;background:#fff;cursor:pointer}
+.fvph-thumb img{display:block;border-radius:8px}
+/* Specs table */
+.fvph-specs{margin:28px 0}
+.fvph-specs-table{width:100%;border-collapse:separate;border-spacing:0 8px}
+.fvph-specs-table th{width:220px;text-align:left;font-weight:600;opacity:.9}
+.fvph-specs-table td{background:#fafafa;border:1px solid #eee;padding:10px 12px;border-radius:10px}

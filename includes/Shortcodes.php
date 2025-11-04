@@ -8,38 +8,51 @@ class FVPH_Shortcodes {
         add_shortcode('fv_products',   [__CLASS__, 'products']);
         add_shortcode('fvph_catalog',  [__CLASS__, 'catalog']);
 
-        // >>> NOVOS <<<
-        add_shortcode('fvph_buy_url',  [__CLASS__, 'buy_url']);   // retorna _fvph_buy_url com UTM
-        add_shortcode('fvph_buy_label',[__CLASS__, 'buy_label']); // retorna label ou "Comprar na {parceiro}" ou "Comprar"
+        // novos utilitários de compra
+        add_shortcode('fvph_buy_url',   [__CLASS__, 'buy_url']);    // URL com UTM opcional
+        add_shortcode('fvph_buy_label', [__CLASS__, 'buy_label']);  // Label/fallback
+
+        // novos para Elementor/dinâmicos
+        add_shortcode('fvph_title',         [__CLASS__, 'title_sc']);
+        add_shortcode('fvph_price',         [__CLASS__, 'price_sc']);
+        add_shortcode('fvph_partner_logo',  [__CLASS__, 'partner_logo_sc']);
+        add_shortcode('fvph_image',         [__CLASS__, 'image_sc']);
+        add_shortcode('fvph_attr',          [__CLASS__, 'attr_sc']);
     }
 
     /* ---------------------------------------------
      * Helpers internos
      * -------------------------------------------*/
+
+    // ===== Helper robusto: aceita id, slug e valida post atual =====
     protected static function resolve_post_id($atts){
-        // permite usar id="123" no shortcode; fallback: post atual
-        $pid = 0;
-        if (isset($atts['id'])) {
+        // prioridade: id -> slug -> post atual (se for 'produto')
+        if (!empty($atts['id'])) {
             $pid = absint($atts['id']);
+            if ($pid) return $pid;
         }
-        if (!$pid) {
-            $pid = get_the_ID();
+        if (!empty($atts['slug'])) {
+            $p = get_page_by_path(sanitize_title($atts['slug']), OBJECT, 'produto');
+            if ($p && !is_wp_error($p)) return (int) $p->ID;
         }
-        return $pid;
+        $pid = get_the_ID();
+        if ($pid && get_post_type($pid) === 'produto') return (int) $pid;
+        return 0;
     }
 
     /* =========================================================
-     *  NOVOS: [fvph_buy_url] e [fvph_buy_label]
+     *  [fvph_buy_url] e [fvph_buy_label]
      * =======================================================*/
 
     /**
-     * [fvph_buy_url utm="1" source="forumdovapor" medium="referral" campaign="produto" id=""]
+     * [fvph_buy_url id="" slug="" utm="1" source="forumdovapor" medium="referral" campaign="produto"]
      * Retorna a URL de compra (_fvph_buy_url) com UTM anexada (opcional).
      */
     public static function buy_url($atts = []){
         $a = shortcode_atts([
-            'id'       => '',          // opcional: força um post_id
-            'utm'      => '1',         // "1" liga UTM, "0" desliga
+            'id'       => '',
+            'slug'     => '',
+            'utm'      => '1',               // "1" liga UTM, "0" desliga
             'source'   => 'forumdovapor',
             'medium'   => 'referral',
             'campaign' => 'produto',
@@ -51,37 +64,36 @@ class FVPH_Shortcodes {
         $url = get_post_meta($post_id, '_fvph_buy_url', true);
         if (!$url) return '';
 
-        // anexa UTM se habilitado
         if ($a['utm'] === '1') {
-            $utm_args = [
+            $url = add_query_arg([
                 'utm_source'   => sanitize_title($a['source']),
                 'utm_medium'   => sanitize_title($a['medium']),
                 'utm_campaign' => sanitize_title($a['campaign']),
-            ];
-            $url = add_query_arg($utm_args, $url);
+            ], $url);
         }
         return esc_url($url);
     }
 
     /**
-     * [fvph_buy_label id=""]
-     * Retorna _fvph_buy_label, senão "Comprar na {parceiro}", senão "Comprar".
+     * [fvph_buy_label id="" slug="" fallback="Comprar"]
+     * Retorna _fvph_buy_label, senão "Comprar na {parceiro}", senão fallback.
      */
     public static function buy_label($atts = []){
         $a = shortcode_atts([
-            'id' => '',
+            'id'       => '',
+            'slug'     => '',
+            'fallback' => 'Comprar',
         ], $atts, 'fvph_buy_label');
 
         $post_id = self::resolve_post_id($a);
-        if (!$post_id) return 'Comprar';
+        if (!$post_id) return esc_html($a['fallback']);
 
-        $label = get_post_meta($post_id, '_fvph_buy_label', true);
-        if (!empty($label)) return esc_html($label);
-
+        $label   = get_post_meta($post_id, '_fvph_buy_label', true);
         $partner = get_post_meta($post_id, '_fvph_partner_name', true);
-        if (!empty($partner)) return 'Comprar na ' . esc_html($partner);
 
-        return 'Comprar';
+        if (!empty($label))   return esc_html($label);
+        if (!empty($partner)) return 'Comprar na ' . esc_html($partner);
+        return esc_html($a['fallback']);
     }
 
     /* =========================================================
@@ -136,7 +148,7 @@ class FVPH_Shortcodes {
             'order'      => 'DESC',
             'order_by'   => 'date',
             'view_label' => 'Ver mais'
-        ], $atts);
+        ], $atts, 'fv_products');
 
         $args = self::build_query_args($a);
         $q = new WP_Query($args);
@@ -215,24 +227,27 @@ class FVPH_Shortcodes {
         $q_products = new WP_Query($args);
 
         $terms_marca = get_terms(['taxonomy'=>$tax_marca,'hide_empty'=>true,'number'=>1000]);
-        $terms_tipo  = get_terms(['taxonomy'=>$tax_tipo, 'hide_empty'=>true,'number'=>1000]);
+        if (is_wp_error($terms_marca)) $terms_marca = [];
+        $terms_tipo  = get_terms(['taxonomy'=>$tax_tipo ,'hide_empty'=>true,'number'=>1000]);
+        if (is_wp_error($terms_tipo)) $terms_tipo = [];
 
         global $wpdb;
         $subs_values = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT meta_value 
-             FROM {$wpdb->postmeta} pm 
+            "SELECT DISTINCT pm.meta_value
+             FROM {$wpdb->postmeta} pm
              INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
              WHERE pm.meta_key = %s AND p.post_type = %s AND p.post_status='publish'
-             ORDER BY meta_value ASC",
+             ORDER BY pm.meta_value ASC",
             '_fvph_attr_substancia','produto'
         ));
+        // normaliza: remove vazios, trim, reindexa
         $subs_values = array_values(array_filter(array_map('trim', (array)$subs_values)));
 
         ob_start(); ?>
         <div class="fvph-catalog">
           <aside class="fvph-filters">
             <div class="fvph-filters__header">
-              <strong><?php echo esc_html(number_format_i18n($q_products->found_posts)); ?></strong> produtos
+              <strong><?php echo esc_html(number_format_i18n((int)$q_products->found_posts)); ?></strong> produtos
               <a class="fvph-filters__reset" href="<?php echo esc_url( remove_query_arg(['q','marca','tipo','subs','pag']) ); ?>">
                 LIMPAR TODAS AS SELEÇÕES
               </a>
@@ -309,7 +324,7 @@ class FVPH_Shortcodes {
                   <div class="fvph-card__actions">
                     <a class="fvph-btn fvph-btn--ghost" href="<?php the_permalink(); ?>">Ver mais</a>
                     <?php if ($buy): ?>
-                      <a class="fvph-btn fvph-btn--dark" href="<?php echo esc_url($buy); ?>" target="_blank" rel="noopener">Comprar</a>
+                      <a class="fvph-btn fvph-btn--dark" href="<?php echo esc_url($buy); ?>" target="_blank" rel="nofollow sponsored noopener">Comprar</a>
                     <?php endif; ?>
                   </div>
                 </article>
@@ -325,7 +340,8 @@ class FVPH_Shortcodes {
                 $base_args = $_GET; unset($base_args['pag']);
                 $make_url = function($page) use ($base_args){
                   $args = array_merge($base_args, ['pag'=>$page]);
-                  return esc_url( add_query_arg($args, remove_query_arg('preview', home_url( add_query_arg([]) ))) );
+                  // remove "preview" e baseia na URL atual
+                  return esc_url( add_query_arg($args, remove_query_arg('preview', home_url(add_query_arg([])))) );
                 };
             ?>
               <nav class="fvph-pagination" aria-label="Navegação de páginas">
@@ -378,5 +394,99 @@ class FVPH_Shortcodes {
         </script>
         <?php
         return ob_get_clean();
+    }
+
+    /* =========================================================
+     *  SHORTCODES AUXILIARES PARA ELEMENTOR
+     * =======================================================*/
+
+    // [fvph_title id="" slug=""]
+    public static function title_sc($atts = []){
+        $a = shortcode_atts(['id'=>'','slug'=>''], $atts, 'fvph_title');
+        $pid = self::resolve_post_id($a);
+        return $pid ? esc_html(get_the_title($pid)) : '';
+    }
+
+    // [fvph_price id="" slug="" prefix="R$ "]
+    public static function price_sc($atts = []){
+        $a = shortcode_atts(['id'=>'','slug'=>'','prefix'=>'R$ '], $atts, 'fvph_price');
+        $pid = self::resolve_post_id($a);
+        if (!$pid) return '';
+        $price = get_post_meta($pid, '_fvph_price', true);
+        return $price !== '' ? esc_html($a['prefix'] . $price) : '';
+    }
+
+    // [fvph_partner_logo id="" slug="" size="thumbnail" type="html|url"]
+    public static function partner_logo_sc($atts = []){
+        $a = shortcode_atts(['id'=>'','slug'=>'','size'=>'thumbnail','type'=>'html'], $atts, 'fvph_partner_logo');
+        $pid = self::resolve_post_id($a);
+        if (!$pid) return '';
+        $logo_id = (int) get_post_meta($pid, '_fvph_partner_logo', true);
+        if (!$logo_id) return '';
+        if ($a['type']==='url') {
+            $u = wp_get_attachment_image_url($logo_id, $a['size']);
+            return $u ? esc_url($u) : '';
+        }
+        return wp_get_attachment_image($logo_id, $a['size'], false, ['loading'=>'lazy']);
+    }
+
+    // [fvph_image id="" slug="" size="large" type="url|html" index="0" attr='class="minha-classe"']
+    // Pega a 1ª da galeria; se não tiver, usa a destaque.
+    public static function image_sc($atts = []){
+        $a = shortcode_atts([
+            'id'    => '',
+            'slug'  => '',
+            'size'  => 'large',
+            'type'  => 'url',   // use 'url' no Elementor (dinâmico -> URL)
+            'index' => '0',
+            'attr'  => '',      // attributes livres quando type="html"
+        ], $atts, 'fvph_image');
+
+        $pid = self::resolve_post_id($a);
+        if (!$pid) return '';
+
+        $gallery = get_post_meta($pid, '_fvph_gallery_ids', true);
+
+        // permite que a galeria seja string CSV ou array
+        if (is_string($gallery)) {
+            $parts = array_filter(array_map('trim', explode(',', $gallery)));
+            $gallery = $parts ? array_map('intval', $parts) : [];
+        } elseif (!is_array($gallery)) {
+            $gallery = [];
+        }
+
+        $img_id = 0;
+        $idx = max(0, (int)$a['index']);
+        if ($gallery && isset($gallery[$idx])) {
+            $img_id = (int)$gallery[$idx];
+        } elseif (has_post_thumbnail($pid)) {
+            $img_id = (int) get_post_thumbnail_id($pid);
+        }
+        if (!$img_id) return '';
+
+        if ($a['type'] === 'html') {
+            // converte attr string em array rudimentar (somente class/alt/title suportados aqui)
+            $extra = ['loading'=>'lazy'];
+            if (!empty($a['attr'])) {
+                if (preg_match('/class="([^"]+)"/', $a['attr'], $m))  $extra['class'] = $m[1];
+                if (preg_match('/alt="([^"]+)"/',   $a['attr'], $m))  $extra['alt']   = $m[1];
+                if (preg_match('/title="([^"]+)"/', $a['attr'], $m))  $extra['title'] = $m[1];
+            }
+            return wp_get_attachment_image($img_id, $a['size'], false, $extra);
+        }
+        // default: URL
+        $u = wp_get_attachment_image_url($img_id, $a['size']);
+        return $u ? esc_url($u) : '';
+    }
+
+    // [fvph_attr key="puffs" id="" slug=""]
+    // Retorna qualquer _fvph_attr_{key}
+    public static function attr_sc($atts = []){
+        $a = shortcode_atts(['id'=>'','slug'=>'','key'=>''], $atts, 'fvph_attr');
+        if (!$a['key']) return '';
+        $pid = self::resolve_post_id($a);
+        if (!$pid) return '';
+        $meta = get_post_meta($pid, '_fvph_attr_' . sanitize_key($a['key']), true);
+        return $meta !== '' ? esc_html($meta) : '';
     }
 }

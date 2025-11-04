@@ -1,5 +1,14 @@
 <?php
 if (!defined('ABSPATH')) exit;
+
+/**
+ * PRIORIDADE PARA O ELEMENTOR THEME BUILDER
+ * Se houver um template de Single no Elementor, renderiza e encerra.
+ */
+if (function_exists('elementor_theme_do_location') && elementor_theme_do_location('single')) {
+    return; // Elementor já cuidou do output do single
+}
+
 get_header(); ?>
 <main id="primary" class="site-main fvph-single">
   <?php while(have_posts()): the_post();
